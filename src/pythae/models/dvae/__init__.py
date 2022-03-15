@@ -14,7 +14,7 @@ Available samplers
     :nosignatures:
 """
 
-from .beta_vae_config import BetaVAEConfig
-from .beta_vae_model import BetaVAE
+from .dvae_config import DVAEConfig
+from .dvae_model import DVAE
 
-__all__ = ["BetaVAE", "BetaVAEConfig"]
+__all__ = ["DVAE", "DVAEConfig"]
