@@ -33,69 +33,6 @@ class CRVAE(BaseAE):
         provided MLP you may end up with a ``MemoryError``.
     """
 
-    SimpleAugmentation = transforms.Compose([
-        transforms.RandomAffine(degrees=15, translate=(0.05,0.05), scale=(0.9,1.1)),
-    ])
-
-
-    LargeAugmentation = transforms.Compose([
-        transforms.RandomAffine(degrees=30, translate=(0.1,0.1), scale=(0.75,1.25)),
-    ])
-
-
-    SimpleVerticalFlipAugmentation = transforms.Compose([
-        transforms.RandomVerticalFlip(),
-        transforms.RandomAffine(degrees=15, translate=(0.05,0.05), scale=(0.9,1.1)),
-    ])
-
-
-    LargeVerticalFlipAugmentation = transforms.Compose([
-        transforms.RandomVerticalFlip(),
-        transforms.RandomAffine(degrees=30, translate=(0.1,0.1), scale=(0.75,1.25)),
-    ])
-
-
-    SimpleJitterAugmentation = transforms.Compose([
-        transforms.RandomAffine(degrees=15, translate=(0.05,0.05), scale=(0.9,1.1)),
-        transforms.ColorJitter(brightness=0.2, hue=0.2, contrast=0.5),
-    ])
-
-
-    LargeJitterAugmentation = transforms.Compose([
-        transforms.RandomAffine(degrees=30, translate=(0.1,0.1), scale=(0.75,1.25)),
-        transforms.ColorJitter(brightness=0.2, hue=0.2, contrast=0.5),
-    ])
-
-
-    SimpleVerticalFlipJitterAugmentation = transforms.Compose([
-        transforms.RandomVerticalFlip(),
-        transforms.RandomAffine(degrees=15, translate=(0.05,0.05), scale=(0.9,1.1)),
-        transforms.ColorJitter(brightness=0.2, hue=0.2, contrast=0.5),
-    ])
-
-
-    LargeVerticalFlipJitterAugmentation = transforms.Compose([
-        transforms.RandomVerticalFlip(),
-        transforms.RandomAffine(degrees=30, translate=(0.1,0.1), scale=(0.75,1.25)),
-        transforms.ColorJitter(brightness=0.2, hue=0.2, contrast=0.5),
-    ])
-
-    IMAGENET_MEAN = [0.485, 0.456, 0.406] 
-    IMAGENET_STD = [0.229, 0.224, 0.225]
-
-    augmentations = {
-        'simple': SimpleAugmentation,
-        'large': LargeAugmentation,
-        'simple_vertical_flip': SimpleVerticalFlipAugmentation,
-        'large_vertical_flip': LargeVerticalFlipAugmentation,
-        'simple_jitter': SimpleJitterAugmentation,
-        'large_jitter': LargeJitterAugmentation,
-        'simple_vertical_flip_jitter': SimpleVerticalFlipJitterAugmentation,
-        'large_vertical_flip_jitter': LargeVerticalFlipJitterAugmentation,
-    }
-
-    augmentation_names = ['simple', 'large', 'simple_vertical_flip', 'large_vertical_flip', 'simple_jitter', 'large_jitter', 'simple_vertical_flip_jitter', 'large_vertical_flip_jitter']
-
     def __init__(
         self,
         model_config: CRVAEConfig,
@@ -187,23 +124,23 @@ class CRVAE(BaseAE):
             recon_loss = F.mse_loss(
                 recon.reshape(batch_size, -1),
                 original.reshape(batch_size, -1),
-                reduction="none",
-            ).sum(dim=-1)
+                reduction="mean",
+            )
         elif self.model_config.reconstruction_loss == "bce":
             recon_loss = F.binary_cross_entropy(
-                recon.view(batch_size, -1),
-                original.view(batch_size, -1), 
-                reduction="none"
-            ).sum(dim=-1)
+                recon.reshape(batch_size, -1),
+                original.reshape(batch_size, -1), 
+                reduction="mean"
+            )
 
         # see Appendix B from VAE paper:
         # Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
         # https://arxiv.org/abs/1312.6114
         # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
-        KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim = -1)
+        KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
 
         vae_loss = recon_loss + beta * KLD
-        return vae_loss.mean(dim=0), recon_loss.mean(dim=0), KLD.mean(dim=0)
+        return vae_loss, recon_loss, KLD
 
 
     def _cr_loss(self, mu, logvar, mu_aug, logvar_aug, gamma):
@@ -215,10 +152,10 @@ class CRVAE(BaseAE):
 
         cr_loss = 0.5 * torch.sum(2 * torch.log(std_orig / std_aug) - \
                 1 + (std_aug ** 2 + (mu_aug - mu) ** 2) / std_orig ** 2,
-                dim = -1)
+                dim = 1).mean(dim=0)
 
         cr_loss *= gamma
-        return cr_loss.mean(dim=0)
+        return cr_loss
 
     def _sample_gauss(self, mu, std):
         # Reparametrization trick
@@ -275,18 +212,3 @@ class CRVAE(BaseAE):
 
         return model
 
-    def apply_transform(self, raw_images: torch.Tensor, aug_type=None):
-        transform = self.get_augmentation(aug_type)
-        return transform(raw_images)
-    
-    def get_augmentation(self, aug_type=None, normalize=False, mean=None, std=None):
-        if aug_type == None:
-            aug_type = random.choice(self.augmentation_names)
-        augmentation = self.augmentations[aug_type]    
-        if normalize:
-            mean = mean if mean is not None else self.IMAGENET_MEAN
-            std = std if std is not None else self.IMAGENET_STD
-            normalize_aug = transforms.Normalize(mean, std)
-            augmentation.transforms.append(normalize_aug)
-
-        return augmentation

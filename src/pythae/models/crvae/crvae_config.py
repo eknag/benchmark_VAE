@@ -15,4 +15,4 @@ class CRVAEConfig(BaseAEConfig):
         default_decoder (bool): Whether the encoder default. Default: True.
         """
 
-    pass
+    reconstruction_loss = "mse"

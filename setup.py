@@ -43,6 +43,7 @@ setup(
         "imageio",
         "sklearn",
         "typing-extensions",
+        "instafilter",
     ],
     python_requires=">=3.6",
 )

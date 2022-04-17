@@ -61,16 +61,19 @@ class DVAE(VAE):
         """
 
         x = inputs["data"]
-        noise_added_to_input = torch.randn(size=x.size()).cuda() * self.sigma
-        noisy_x = x + noise_added_to_input
+        noisy_x = self.apply_transform(x, "denoise")
+      #  noise_added_to_input = torch.randn(size=x.size()).cuda() * self.sigma
+      #  noisy_x = x + noise_added_to_input
 
         encoder_output = self.encoder(noisy_x)
+
 
         mu, log_var = encoder_output.embedding, encoder_output.log_covariance
 
         std = torch.exp(0.5 * log_var)
         z, eps = self._sample_gauss(mu, std)
         recon_x = self.decoder(z)["reconstruction"]
+
 
         loss, recon_loss, kld = self.loss_function(recon_x, x, mu, log_var, z)
 
@@ -103,7 +106,6 @@ class DVAE(VAE):
             ).sum(dim=-1)
 
         KLD = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp(), dim=-1)
-
         return (recon_loss + KLD).mean(dim=0), recon_loss.mean(dim=0), KLD.mean(dim=0)
 
     def _sample_gauss(self, mu, std):

@@ -12,8 +12,7 @@ from ...data.datasets import BaseDataset
 from ..nn.default_architectures import Encoder_AE_MLP, Decoder_AE_MLP
 
 from .base_config import BaseAEConfig
-
-from .base_utils import ModelOutput, CPU_Unpickler
+from .base_utils import ModelOutput, CPU_Unpickler, AugmentationProcessor
 
 class BaseAE(nn.Module):
     """Base class for Autoencoder based models.
@@ -69,6 +68,7 @@ class BaseAE(nn.Module):
             self.model_config.uses_default_decoder = False
 
         self.set_decoder(decoder)
+        self.augmentation_processor = AugmentationProcessor()
 
         self.device = None
 
@@ -271,3 +271,9 @@ class BaseAE(nn.Module):
                 )
             )
         self.decoder = decoder
+
+    def apply_transform(self, raw_images: torch.Tensor, aug_type=None):
+        if aug_type == "ins_filter":
+            assert raw_images.size(1) >= 3, "the ins_filter augmentation can only be applied on images with at least 3 channels"
+        transform = self.augmentation_processor.get_augmentation(aug_type)
+        return transform(raw_images)
